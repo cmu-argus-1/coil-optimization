@@ -4,38 +4,51 @@ using JuMP, Juniper, Ipopt
 ipopt = optimizer_with_attributes(Ipopt.Optimizer, "print_level"=>0)
 optimizer = optimizer_with_attributes(Juniper.Optimizer, "nl_solver"=>ipopt)
 
+# Resistive loss limit 
+resistive_loss_limit = 1.0
+
 # Voltage
 V = 5.0
 
-
-# Resistivity 
+# Copper Resistivity 
 ρ = 1.724 * 10^-8
 
+# PCB edge length (square)
+pcb_side = 0.1 # 10cm
 
-PCBside = 0.1 # 10cm
-Max_side_coil = PCBside
+# Outermost coil edge length
+coil_side_max = pcb_side
+
+# PCB trace manufacturing constraint
+min_feature_width = 0.00009 # 1oz thickness - 0.09 mm
+#min_feature_width = 0.0002 # 2oz thickness - 0.2 mm
+
+# PCB trace thickness
+trace_thickness =  3.556 * 10^-5 # 1oz copper - 35um = 1.4 mils
+#trace_thickness = 7.112 * 10^-5 # 2oz copper - 70um = 2.8 mils
  
+# PCB layers
+pcb_layers = 2
+
 
 model = Model(optimizer)
 
-min_feature_width = 0.000089 # 1oz thickness - 0.089 mm
-min_feature_width = 0.0002 # 2oz thickness - 0.2 mm
 
 @variable(model, N, Int)
 @variable(model, 0 <= I <= 1.0)
-@variable(model, min_feature_width <= t_w <= 0.01)
-@variable(model, min_feature_width <= g_w <= 0.01)
+@variable(model, min_feature_width <= trace_width <= coil_side_max / 2)
+@variable(model, min_feature_width <= gap_width <= coil_side_max / 2)
 
-w = t_w + g_w
-A = (PCBside - N * w)^2
-l = 4 * (PCBside - N * w)
-R = ρ * l / A
+coil_width = trace_width + gap_width
+A = (coil_side_max - N * coil_width)^2 # Average coil cross-section area
+coil_length = 4 * (coil_side_max - N * coil_width) * N * pcb_layers
+R = ρ * coil_length / (trace_width * trace_thickness) # coil resistance
 
-@objective(model, Max,  N * I * A - I^2 * R) # - I^2 * R +
+@objective(model, Max,  N * I * A * pcb_layers) # - I^2 * R +
 
-
-@constraint(model, N * w  <= 0.5 * PCBside)
-#@constraint(model, V >= I * R)
+@constraint(model, I^2 * R <= resistive_loss_limit) # .. Watts - Requirement?
+@constraint(model, N * coil_width <= 0.5 * coil_side_max)
+@constraint(model, V == I * R)
 
 
 optimize!(model)
@@ -47,19 +60,24 @@ println(termination_status(model))
 println("Objective_value: ", objective_value(model))
 N = value.(N)
 I = value.(I)
-t_w = value.(t_w)
-g_w = value.(g_w)
-w = t_w + g_w
-A = (PCBside - N * w)^2
+trace_width = value.(trace_width)
+gap_width = value.(gap_width)
 
-println("N: ", N)
+println("Coils per layer: ", N)
+println("Total coils: ", N * pcb_layers)
 println("I: ", I)
-println("trace width: ", t_w)
-println("gap width: ", g_w)
+println("Trace width (m): ", trace_width)
+println("Gap width (m): ", gap_width)
 
-R = ρ * 4 * (PCBside - N * w) / ((PCBside - N * w)^2)
 
+coil_width = trace_width + gap_width
+A = (coil_side_max - N * coil_width)^2
+coil_length = 4 * (coil_side_max - N * coil_width) * N * pcb_layers
+R = ρ * coil_length / (trace_width * trace_thickness)
+
+println("Total coils width (m): ", N * coil_width)
+println("Total coil length (m): ", 4 * (coil_side_max - N * coil_width) * N * pcb_layers)
 println("Cross section area (m^2): ", A)
-println("Magnetic moment (A m^2): ", N * I * A)
+println("Magnetic moment (A m^2): ", N * I * A * pcb_layers)
 println("Resistance (Ohm): ", R)
 println("Resistive Loss (W): ", I^2 * R)
