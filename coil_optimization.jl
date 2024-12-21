@@ -26,7 +26,7 @@ gap_width       = 0.0001524 # PCB recommended capabilities
 #min_feature_width = 0.0002 # 2oz thickness - 0.2 mm
 
 # PCB trace thickness
-k = 1 # effective copper thickness (between 0.75 and 0.8 for PCBWay)
+k = 0.75 # effective copper thickness (between 0.75 and 0.8 for PCBWay)
 trace_thickness =  35 * 10^-6 * k # 1oz copper - 35um = 1.4 mils
 #trace_thickness = 70 * 10^-6 # 2oz copper - 70um = 2.8 mils
  
@@ -43,14 +43,14 @@ model = Model(optimizer)
 
 coil_width = trace_width + gap_width
 
-A = ((coil_x * coil_y) - (coil_x * coil_width * (N - 1) / 2) - (coil_y * coil_width * (N - 1) / 2) + (coil_width * coil_width * (2 * N * N + 2 * N + 1) / 6)) * N * pcb_layers
+A = ((coil_x * coil_y) - (coil_x * coil_width * (N - 1) / 2) - (coil_y * coil_width * (N - 1) / 2) + (coil_width * coil_width * (2 * N * N - 3 * N + 1) / 6)) * N * pcb_layers
 
 # sum_i=1^N (x - w * (i-1)) * (y - w * (i-1))
 # sum_i=1^N (xy - xw * (i-1) - yw * (i-1) + w^2 * (i-1)^2)
 # xyN - xw * (N * (N+1) / 2 - N) - yw * (N * (N+1) / 2 - N) + sum_i=1^N (w^2 * (i^2 - 2i + 1))
 # xyN - xwN (N - 1) / 2 - ywN (N - 1) / 2 + w^2(N - N(N+1) + N(N+1)(2N+1) / 6)
-# N * (xy - xw(N-1)/2 - yw(N-1)/2 + w^2(1 - N - 1 + 2N^2 + N + 2N + 1) / 6)
-# N * (xy - xw(N-1)/2 - yw(N-1)/2 + w^2(2N^2 + 2N + 1) / 6)
+# N * (xy - xw(N-1)/2 - yw(N-1)/2 + w^2(1 - N - 1 + (2N^2 + N + 2N + 1) / 6))
+# N * (xy - xw(N-1)/2 - yw(N-1)/2 + w^2(2N^2 - 3N + 1) / 6)
 
 coil_length = 2 * (coil_x + coil_y - (coil_width * (N - 1))) * N * pcb_layers
 
@@ -93,7 +93,7 @@ println("Gap width (m): ", gap_width)
 
 coil_width = trace_width + gap_width
 
-A = ((coil_x * coil_y) - (coil_x * coil_width * (N - 1) / 2) - (coil_y * coil_width * (N - 1) / 2) + (coil_width * coil_width * (2 * N * N + 2 * N + 1) / 6)) * N * pcb_layers
+A = ((coil_x * coil_y) - (coil_x * coil_width * (N - 1) / 2) - (coil_y * coil_width * (N - 1) / 2) + (coil_width * coil_width * (2 * N * N - 3 * N + 1) / 6)) * N * pcb_layers
 coil_length = 2 * (coil_x + coil_y - (coil_width * (N - 1))) * N * pcb_layers
 
 R = ρ * coil_length / (trace_width * trace_thickness)
