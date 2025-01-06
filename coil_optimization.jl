@@ -14,15 +14,15 @@ V = 5.0
 ρ = 1.724 * 10^-8
 
 # Outermost Coil Size
-coil_y = 0.09570 # mm - Values from XY board
-coil_x = 0.07975
+coil_y = 0.09680 # mm - Values from XY board
+coil_x = 0.08085
 
 # Maximum width of Coils on PCB
-max_coil_width = 0.0135 # mm - Value from XY board
+max_coil_width = 0.014 # mm - Value from XY board
 
 # PCB trace manufacturing constraint
 min_trace_width = 0.0001524 # 1oz thickness - 6 mils =  0.1524 mm
-gap_width       = 0.0001524 # PCB recommended capabilities
+min_gap_width   = 0.0001524 # PCB recommended capabilities
 #min_feature_width = 0.0002 # 2oz thickness - 0.2 mm
 
 # PCB trace thickness
@@ -31,7 +31,7 @@ trace_thickness =  35 * 10^-6 * k # 1oz copper - 35um = 1.4 mils
 #trace_thickness = 70 * 10^-6 # 2oz copper - 70um = 2.8 mils
  
 # PCB layers
-pcb_layers = 2
+pcb_layers = 4
 
 
 model = Model(optimizer)
@@ -40,6 +40,7 @@ model = Model(optimizer)
 @variable(model, N, Int)
 @variable(model, 0 <= I <= 1.0)
 @variable(model, min_trace_width <= trace_width <= max_coil_width)
+@variable(model, min_gap_width <= gap_width <= max_coil_width)
 
 coil_width = trace_width + gap_width
 
@@ -52,7 +53,9 @@ A = ((coil_x * coil_y) - (coil_x * coil_width * (N - 1) / 2) - (coil_y * coil_wi
 # N * (xy - xw(N-1)/2 - yw(N-1)/2 + w^2(1 - N - 1 + (2N^2 + N + 2N + 1) / 6))
 # N * (xy - xw(N-1)/2 - yw(N-1)/2 + w^2(2N^2 - 3N + 1) / 6)
 
-coil_length = 2 * (coil_x + coil_y - (coil_width * (N - 1))) * N * pcb_layers
+coil_length = 2 * (coil_x + coil_y - (coil_width * (N - 1))) * N 
+coil_length += (-0.002438 * N * (N + 1) / 2) + (0.00452 * N) # Bias terms found experimentally for X/Y boards. Only valid for coil_width of 0.6mm
+coil_length *= pcb_layers
 
 # sum_i=1^N 2 * ((x - w * (i-1)) + (y - w * (i-1)))
 # sum_i=1^N 2 * (x + y - 2 * w * (i-1))
@@ -68,8 +71,11 @@ R = ρ * coil_length / (trace_width * trace_thickness) # coil resistance
 @objective(model, Max, I * A) # - I^2 * R +
 
 @constraint(model, I^2 * R <= power_limit) # .. Watts - Requirement?
-@constraint(model, N * coil_width <= max_coil_width)
+@constraint(model, (N - 1) * coil_width <= max_coil_width)
 @constraint(model, V == I * R)
+
+
+#@constraint(model, coil_width == 0.0006) # Contraint required for valid bias terms
 
 
 optimize!(model)
@@ -94,11 +100,15 @@ println("Gap width (m): ", gap_width)
 coil_width = trace_width + gap_width
 
 A = ((coil_x * coil_y) - (coil_x * coil_width * (N - 1) / 2) - (coil_y * coil_width * (N - 1) / 2) + (coil_width * coil_width * (2 * N * N - 3 * N + 1) / 6)) * N * pcb_layers
-coil_length = 2 * (coil_x + coil_y - (coil_width * (N - 1))) * N * pcb_layers
+
+coil_length = 2 * (coil_x + coil_y - (coil_width * (N - 1))) * N 
+coil_length += (-0.002438 * N * (N + 1) / 2) + (0.00452 * N) # Bias terms found experimentally for X/Y boards. Only valid for coil_width of 0.6mm
+coil_length *= pcb_layers
 
 R = ρ * coil_length / (trace_width * trace_thickness)
 
-println("Total coils width (m): ", N * coil_width)
+println("Single coil width (m): ", coil_width)
+println("Total coils width (m): ", (N - 1) * coil_width)
 println("Total coil length (m): ", coil_length)
 println("Sum Cross section area (m^2): ", A)
 println("Magnetic moment (A m^2): ", I * A)
